@@ -8,7 +8,7 @@ import os
 class App:
     def __init__(self, master):
         self.master = master
-        master.title("FFmpeg Compressor")
+        master.title("ClipShrinker")
 
         self.input_file_label = tk.Label(master, text="Input File:")
         self.input_file_label.grid(row=0, column=0)
