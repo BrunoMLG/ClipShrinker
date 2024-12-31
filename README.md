@@ -48,13 +48,13 @@ Once the process is complete, a success message will appear, and the input/outpu
 
 ## Executable Version
 
-If you don’t want to install Python or set up dependencies, an **executable version** of the application is available in the [Releases](https://github.com/yourusername/ClipShrinker/releases) section. You can download and run the `.exe` directly on your Windows machine, which makes it easier for users to compress videos without any additional setup.
+If you don’t want to install Python or set up dependencies, an **executable version** of the application is available in the [Releases](https://github.com/BrunoMLG/ClipShrinker/releases) section. You can download and run the `.exe` directly on your Windows machine, which makes it easier for users to compress videos without any additional setup.
 
 ### Best Way to Use the Software
 
 For users who just want to quickly compress videos for Discord:
 
-1. **Download the latest `.exe`** from the [Releases](https://github.com/yourusername/ClipShrinker/releases) section.
+1. **Download the latest `.exe`** from the [Releases](https://github.com/BrunoMLG/ClipShrinker/releases) section.
 2. **Run the executable** and follow the simple GUI prompts:
    - Select your input video.
    - Choose the output location and file name.
