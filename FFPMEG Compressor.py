@@ -1,12 +1,14 @@
 import subprocess
 import tkinter as tk
 from tkinter import filedialog
+from imageio_ffmpeg import get_ffmpeg_exe
 import os
+
 
 class App:
     def __init__(self, master):
         self.master = master
-        master.title("FFmpeg App")
+        master.title("FFmpeg Compressor")
 
         self.input_file_label = tk.Label(master, text="Input File:")
         self.input_file_label.grid(row=0, column=0)
@@ -60,18 +62,36 @@ class App:
         input_file = self.input_file_path.get()
         output_file = self.output_file_path.get()
 
-        if not input_file or not output_file:
+        # Get the path to the FFmpeg binary
+        ffmpeg_path = get_ffmpeg_exe()
+
+        # FFmpeg command to compress the video
+        command = [
+        ffmpeg_path,
+        "-i", input_file,
+        "-y",
+        "-fs", "7950000",
+        "-r", "60",
+        "-s", "1280x720",
+        "-b:a", "96000",
+        "-b:v", "4000000",
+        output_file
+        ]
+
+        if not input_file or not output_file or input_file == "No file selected" or output_file == "No file selected":
+            tk.messagebox.showwarning("Warning", "Please select both input and output files.")
             return
 
         # Add the -y option to automatically overwrite output files without prompting the user
-        command = f'ffmpeg -i "{input_file}" -y -fs 7950000 -fpsmax 60 -s 1280x720 -b:a 96000 -b:v 4000000 "{output_file}"'        
-        process = subprocess.run(command, capture_output=True, shell=True)
-        
+        process = subprocess.run(command, capture_output=True, text=True)
         if process.returncode == 0:
             tk.messagebox.showinfo("Rendering complete", "The video has been successfully rendered.")
-            self.master.destroy()
+            self.input_file_path.set("No file selected")
+            self.output_file_path.set("No file selected")
         else:
-            tk.messagebox.showerror("Error", "An error occurred during rendering.")
+            error_message = process.stderr or "An unknown error occurred."
+            tk.messagebox.showerror("Error", f"An error occurred during rendering:\n{error_message}")
+
 
 
 root = tk.Tk()
