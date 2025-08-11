@@ -35,6 +35,20 @@ To run the program from source, execute the following command in your terminal:
 ```bash
 python ClipShrinker.py
 ```
+Build Standalone Executable
+
+To create a standalone .exe file for Windows (with no need for Python installation), use PyInstaller.
+Steps to create the .exe:
+
+    Install PyInstaller:
+
+pip install pyinstaller
+
+Run the following command to create the executable:
+
+    pyinstaller --onefile --noconsole --icon=ClipShrinker.ico --name "ClipShrinker" ClipShrinker.py
+
+    This will generate a ClipShrinker.exe file in the dist/ directory, which can be distributed and run without Python.
 
 This will launch the GUI where you can select the input video, choose an output location, and render the compressed video.
 
