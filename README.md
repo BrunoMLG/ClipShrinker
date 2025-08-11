@@ -35,7 +35,7 @@ To run the program from source, execute the following command in your terminal:
 ```bash
 python ClipShrinker.py
 ```
-Build Standalone Executable
+### 3. Build Standalone Executable
 
 To create a standalone .exe file for Windows (with no need for Python installation), use PyInstaller.
 Steps to create the .exe:
