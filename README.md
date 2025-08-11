@@ -48,7 +48,7 @@ Run the following command to create the executable:
 
     pyinstaller --onefile --noconsole --icon=ClipShrinker.ico --name "ClipShrinker" ClipShrinker.py
 
-    This will generate a ClipShrinker.exe file in the dist/ directory, which can be distributed and run without Python.
+This will generate a ClipShrinker.exe file in the dist/ directory, which can be distributed and run without Python.
 
 This will launch the GUI where you can select the input video, choose an output location, and render the compressed video.
 
