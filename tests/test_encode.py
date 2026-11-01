@@ -70,6 +70,15 @@ def test_size_mode_two_pass():
     assert second[-1] == "out.mp4"
     assert "-pass" in second and "-b:v" in second
     assert plan.estimated_bytes < 10 * MB
+    # Both passes need identical frame timing or libx264 rejects pass 2 on VFR input.
+    for cmd in plan.passes:
+        assert cmd[cmd.index("-fps_mode") + 1] == "vfr"
+
+
+def test_x265_two_pass_frame_timing():
+    s = EncodeSettings(mode=MODE_SIZE, codec="h265", two_pass=True)
+    for cmd in build_plan("ffmpeg", INFO, s, "in.mp4", "out.mp4", passlog="/tmp/log").passes:
+        assert cmd[cmd.index("-fps_mode") + 1] == "vfr"
 
 
 def test_quality_mode_single_pass_and_scaling():

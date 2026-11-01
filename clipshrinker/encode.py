@@ -379,6 +379,11 @@ def build_plan(
         else:
             p1 = ["-pass", "1", "-passlogfile", passlog]
             p2 = ["-pass", "2", "-passlogfile", passlog]
+        # Both passes must see exactly the same frames. By default the null muxer of pass 1
+        # keeps frames with duplicate timestamps while MP4 drops them, so variable frame
+        # rate recordings (Steam, OBS, phones) fail with "Incomplete MB-tree stats file".
+        sync = ["-fps_mode", "vfr"]
+        p1, p2 = sync + p1, sync + p2
         # The analysis pass only looks at video, so skip audio mapping and mixing.
         first_vf = ["-vf", ",".join(vf)] if vf else []
         first = head + first_vf + ["-map", "0:v:0"] + video + p1 + ["-an", "-f", "null", os.devnull]
