@@ -56,15 +56,34 @@ jobs:
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item dist/ClipShrinker.exe release/ClipShrinker-windows-x64.exe
 
-      - name: Package (Linux)
+      - name: Package AppImage (Linux)
         if: matrix.platform == 'linux'
         run: |
-          mkdir -p release pkg/ClipShrinker
-          cp dist/ClipShrinker pkg/ClipShrinker/
-          cp assets/clipshrinker.desktop assets/install-linux.sh pkg/ClipShrinker/
-          cp clipshrinker/resources/icon.png pkg/ClipShrinker/clipshrinker.png
-          chmod +x pkg/ClipShrinker/ClipShrinker pkg/ClipShrinker/install-linux.sh
-          tar -C pkg -czf release/ClipShrinker-linux-x64.tar.gz ClipShrinker
+          mkdir -p release
+          tools/build_appimage.sh release/ClipShrinker-linux-x86_64.AppImage
+
+      - name: Smoke-test AppImage (Linux)
+        if: matrix.platform == 'linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          app=release/ClipShrinker-linux-x86_64.AppImage
+          # The bundled FFmpeg must be present and runnable.
+          (cd build && ../$app --appimage-extract >/dev/null)
+          ffmpeg_bin=$(find build/squashfs-root -path '*imageio_ffmpeg/binaries/ffmpeg-*' -type f | head -n1)
+          test -n "$ffmpeg_bin"
+          "$ffmpeg_bin" -hide_banner -version | head -n1
+          # The app should start and keep running until we stop it.
+          set +e
+          timeout 15 "$app" > app.log 2>&1
+          status=$?
+          set -e
+          cat app.log
+          if [ "$status" -ne 124 ]; then
+            echo "ClipShrinker exited early with status $status"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:

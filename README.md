@@ -63,22 +63,26 @@ Download the latest version from the
 
 ### Linux
 
-1. Download `ClipShrinker-linux-x64.tar.gz` and extract it:
-   ```bash
-   tar -xzf ClipShrinker-linux-x64.tar.gz
-   ```
-2. Run it directly:
-   ```bash
-   ./ClipShrinker/ClipShrinker
-   ```
-3. *(Optional)* Add it to your application menu. This installs for your user only and
-   doesn't need `sudo`:
-   ```bash
-   ./ClipShrinker/install-linux.sh
-   ```
-   This copies the app to `~/.local/bin` and adds a menu entry and icon.
+ClipShrinker for Linux is an **AppImage**: one file that runs on most distributions
+without installing anything.
 
-The Linux build runs on most distros from Ubuntu 22.04 / Debian 12 / Fedora 36 onward
+1. Download `ClipShrinker-linux-x86_64.AppImage`.
+2. Make it executable, either by right-clicking it → *Properties* → *Permissions* →
+   **Allow executing file as program**, or in a terminal:
+   ```bash
+   chmod +x ClipShrinker-linux-x86_64.AppImage
+   ```
+3. Double-click it, or run:
+   ```bash
+   ./ClipShrinker-linux-x86_64.AppImage
+   ```
+
+*(Optional)* To add it to your application menu, use
+[Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) or
+[AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher). They also keep
+your AppImages in one place.
+
+The AppImage runs on most distros from Ubuntu 22.04 / Debian 12 / Fedora 36 onward
 (glibc 2.35+). If it doesn't start, see [Troubleshooting](#troubleshooting).
 
 ## How to use
@@ -239,7 +243,7 @@ The executables are built with [PyInstaller](https://pyinstaller.org/) using
 and FFmpeg.
 
 > **PyInstaller cannot cross-compile.** Build the Windows `.exe` on Windows and the
-> Linux binary on Linux. The easiest way to get both is to let GitHub Actions do it
+> Linux AppImage on Linux. The easiest way to get both is to let GitHub Actions do it
 > (see [Automatic builds](#automatic-builds-github-actions)).
 
 ### Build on Windows
@@ -285,17 +289,24 @@ and FFmpeg.
    ```bash
    pyinstaller --noconfirm ClipShrinker.spec
    ```
-3. The result is `dist/ClipShrinker`. To package it like the release build:
+   On Linux this produces a folder, `dist/ClipShrinker/`, rather than a single file.
+   You can run it directly with `dist/ClipShrinker/ClipShrinker`.
+3. Pack the folder into an AppImage:
    ```bash
-   mkdir -p pkg/ClipShrinker && cp dist/ClipShrinker assets/clipshrinker.desktop assets/install-linux.sh pkg/ClipShrinker/ && cp clipshrinker/resources/icon.png pkg/ClipShrinker/clipshrinker.png && tar -C pkg -czf ClipShrinker-linux-x64.tar.gz ClipShrinker
+   tools/build_appimage.sh
    ```
+   The result is `dist/ClipShrinker-linux-x86_64.AppImage`. The script downloads
+   [appimagetool](https://github.com/AppImage/appimagetool) on first use (set
+   `APPIMAGETOOL=/path/to/appimagetool` to use your own copy). It doesn't need FUSE, so it
+   also works in containers. To choose the output path, pass it as an argument:
+   `tools/build_appimage.sh my.AppImage`.
 
-> A binary only runs on distros with the same or a **newer glibc** than the one it was
+> An AppImage only runs on distros with the same or a **newer glibc** than the one it was
 > built on. Build on an older distro (CI uses Ubuntu 22.04) so it works on more systems.
 
 ### Build on macOS (optional)
 
-The same steps work on macOS and produce `dist/ClipShrinker`. macOS isn't part of the
+The Windows steps also work on macOS and produce a single `dist/ClipShrinker` file. macOS isn't part of the
 official builds yet.
 
 ### Automatic builds (GitHub Actions)
@@ -305,8 +316,9 @@ started manually (**Actions → Build → Run workflow**). For both Windows and 
 
 1. installs Python 3.12 and the dependencies,
 2. runs the unit tests,
-3. builds with PyInstaller,
-4. uploads `ClipShrinker-windows-x64.exe` and `ClipShrinker-linux-x64.tar.gz` as
+3. builds with PyInstaller (and on Linux, packs the AppImage),
+4. on Linux, checks that the AppImage starts and that its bundled FFmpeg runs,
+5. uploads `ClipShrinker-windows-x64.exe` and `ClipShrinker-linux-x86_64.AppImage` as
    workflow artifacts (open the run in the **Actions** tab and look under *Artifacts*).
 
 ### Changing the icon
@@ -334,7 +346,7 @@ replace those two files directly.
    git push origin v2.0.0
    ```
 4. GitHub Actions builds both platforms and publishes a **GitHub Release** for the tag
-   with the `.exe` and `.tar.gz` attached and release notes generated automatically.
+   with the `.exe` and `.AppImage` attached and release notes generated automatically.
 
 ## Development
 
@@ -374,7 +386,8 @@ clipshrinker/
     settings_panel.py        presets and all encoding settings
     dialogs.py               Preferences and clip details/trim dialogs
     theme.py                 dark theme
-assets/                      Windows .ico, Linux .desktop file and install script
+assets/                      Windows .ico and the Linux .desktop file
+tools/build_appimage.sh      packs the Linux build into an AppImage
 tests/                       unit tests
 tools/make_icon.py           regenerates the icon
 .github/workflows/build.yml  Windows + Linux builds and releases
@@ -396,6 +409,17 @@ long for its target.
 
 **H.265 files won't play.** Some older devices and browsers don't support HEVC. Use H.264
 for maximum compatibility.
+
+**Linux: the AppImage does nothing when double-clicked.** Make sure it is executable
+(see [Download and install](#linux)). Run it from a terminal to see any error message.
+
+**Linux: the AppImage complains about FUSE.** AppImages normally mount themselves using
+FUSE. Install it (`sudo apt install fuse3` or `sudo dnf install fuse3`), or skip FUSE
+entirely:
+
+```bash
+./ClipShrinker-linux-x86_64.AppImage --appimage-extract-and-run
+```
 
 **Linux: `qt.qpa.plugin: Could not load the Qt platform plugin "xcb"`.** Install the Qt
 libraries listed in [Running from source](#running-from-source).
