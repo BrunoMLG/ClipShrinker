@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ClipShrinker
+Comment=Batch video compressor
+Exec=ClipShrinker %F
+Icon=clipshrinker
+Terminal=false
+Categories=AudioVideo;Video;
+MimeType=video/mp4;video/x-matroska;video/quicktime;video/webm;video/x-msvideo;
