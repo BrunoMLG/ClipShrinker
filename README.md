@@ -1,83 +1,115 @@
+<p align="center">
+  <img src="clipshrinker/resources/icon.png" width="96" alt="ClipShrinker icon">
+</p>
+
 # ClipShrinker
 
-ClipShrinker is a simple Python-based GUI application designed to compress MP4 video files to meet Discord's upload requirements. The application uses **FFmpeg** (bundled with the app) to optimize videos, reducing file size, adjusting frame rate, resolution, and bitrates, making them ready for upload to Discord.
+ClipShrinker is a desktop app for compressing video clips in batches. Drop in a pile of
+clips, pick a preset such as **Discord (10 MB)**, and press **Start**. Each clip is sized to
+fit the limit based on its own length. FFmpeg is bundled, so there's nothing else to install.
+
+Runs on **Windows** and **Linux** (macOS works from source).
 
 ## Features
 
-- **Video Input Selection**: Choose an MP4 video to compress.
-- **Output Path Selection**: The program suggests an output file name, but you can customize it.
-- **Video Compression**: The app uses FFmpeg to compress the input video, optimizing it for upload to Discord with the following settings:
-  - **Resolution**: 1280x720 (HD)
-  - **Frame rate**: 60 FPS
-  - **Audio bitrate**: 96 Kbps
-  - **Video bitrate**: 4 Mbps
-  - **File size limit**: ~7.95 MB (to fit Discord’s file size limitations)
+- **Queue**: add any number of clips (or whole folders) by drag & drop or the file picker.
+  Each clip shows live progress, time left, and the final size. You can reorder, cancel,
+  retry, or remove clips, and encode several at once.
+- **Presets**
+  - Upload limits: Discord (10 MB), Discord Nitro Basic (50 MB), Discord Nitro (500 MB),
+    WhatsApp / Messaging (16 MB), Email (25 MB)
+  - Quality: High quality, Balanced, Small (HEVC), Tiny, Archive (AV1), Web (VP9 WebM)
+  - Hardware: fast GPU encoding on NVIDIA, AMD, and Intel
+  - Classic ClipShrinker (the original 1.x settings)
+  - **Your own presets**: tweak any setting and click *Save as…*
+- **Fine-tuning**
+  - Three rate-control modes: *Target size*, *Quality* (CRF), or *Bitrate*
+  - Codecs: H.264, H.265/HEVC, AV1, VP9
+  - Encoders: CPU, NVIDIA NVENC, Intel Quick Sync, AMD AMF, Apple VideoToolbox. The app
+    checks which ones actually work on your machine.
+  - Speed / efficiency slider, two-pass encoding
+  - Resolution cap, including **Auto**, which picks the best resolution the size limit
+    allows. Portrait clips are handled correctly.
+  - Frame-rate cap, audio codec / bitrate / mono, removing audio
+  - **Mixing every audio track into one**, for OBS recordings with separate game and mic tracks
+  - **Trim** (start/end) for each clip
+  - Output format (MP4, MKV, WebM, MOV), output folder, file-name template, what to do
+    when the file already exists, metadata stripping, extra FFmpeg arguments
+- **Size-limit safety net**: if a clip still comes out over the limit, it is re-encoded
+  automatically with a lower bitrate. Clips that are already small enough are skipped.
+- Live size estimate for the selected clip, a notification when the queue finishes, and
+  settings that persist between runs.
 
-## Requirements
+## Download
 
-- **Python 3.x** (Python 3.6+ recommended) if you want to run the source code.
-- **FFmpeg** (bundled with the application through `imageio-ffmpeg`).
-- Required Python packages:
-  - `tkinter` (for the GUI)
-  - `subprocess` (to run FFmpeg commands)
-  - `imageio-ffmpeg` (bundled for FFmpeg functionality)
+Get the latest build from [Releases](https://github.com/BrunoMLG/ClipShrinker/releases):
 
-## Installation
+| Platform | File | How to run |
+| --- | --- | --- |
+| Windows | `ClipShrinker-windows-x64.exe` | Double-click it. Nothing to install. |
+| Linux | `ClipShrinker-linux-x64.tar.gz` | Extract it, then run `./ClipShrinker`, or run `./install-linux.sh` to add it to your app menu. |
 
-### 1. Install Python dependencies (if running the source code):
-Make sure you have Python installed on your system. Then, install the necessary libraries using `pip`:
+## Running from source
+
+Requires Python 3.9+.
+
 ```bash
-pip install tk imageio-ffmpeg
+python -m venv .venv
 ```
 
-### 2. Running the Program
-To run the program from source, execute the following command in your terminal:
+Activate it (`.venv\Scripts\activate` on Windows, `source .venv/bin/activate` on Linux/macOS), then:
+
+```bash
+pip install -r requirements.txt
+```
+
 ```bash
 python ClipShrinker.py
 ```
-### 3. Build Standalone Executable
 
-To create a standalone .exe file for Windows (with no need for Python installation), use PyInstaller.
-Steps to create the .exe:
+You can also pass files on the command line (`python ClipShrinker.py clip1.mp4 folder/`) to
+add them to the queue.
 
-    Install PyInstaller:
+## Building the executables
 
-pip install pyinstaller
+Builds run on **GitHub Actions** (`.github/workflows/build.yml`) for Windows and Linux on every
+push. Pushing a version tag publishes a GitHub Release with both files attached:
 
-Run the following command to create the executable:
+```bash
+git tag v2.0.0 && git push origin v2.0.0
+```
 
-    pyinstaller --onefile --noconsole --icon=ClipShrinker.ico --name "ClipShrinker" ClipShrinker.py
+To build locally, on the platform you're targeting:
 
-This will generate a ClipShrinker.exe file in the dist/ directory, which can be distributed and run without Python.
+```bash
+pip install -r requirements-dev.txt
+```
 
-This will launch the GUI where you can select the input video, choose an output location, and render the compressed video.
+```bash
+pyinstaller --noconfirm ClipShrinker.spec
+```
 
-## Usage
+The executable ends up in `dist/`. PyInstaller can't cross-compile, so build the Windows `.exe`
+on Windows and the Linux binary on Linux (or just let CI do both).
 
-1. **Select Input File**: Click on "Select Input File" to choose the MP4 video you want to compress.
-2. **Select Output File**: Click on "Select Output File" to choose where to save the compressed video.
-3. **Render**: Click "Render" to compress the video for Discord. The app will apply the optimized settings and save the file at the selected location.
+## Development
 
-Once the process is complete, a success message will appear, and the input/output paths will be reset, ready for the next task.
+```bash
+pytest
+```
 
-## Executable Version
+Project layout:
 
-If you don’t want to install Python or set up dependencies, an **executable version** of the application is available in the [Releases](https://github.com/BrunoMLG/ClipShrinker/releases) section. You can download and run the `.exe` directly on your Windows machine, which makes it easier for users to compress videos without any additional setup.
+```
+clipshrinker/
+  encode.py        settings model + FFmpeg command builder (pure Python, unit tested)
+  presets.py       built-in presets
+  ffmpeg.py        locating FFmpeg, probing files, detecting hardware encoders
+  jobs.py          the queue: runs FFmpeg via QProcess, progress, retries
+  config.py        settings saved to the user config folder
+  ui/              PySide6 interface (main window, queue list, settings panel, dialogs)
+tools/make_icon.py regenerates the app icon
+```
 
-### Best Way to Use the Software
-
-For users who just want to quickly compress videos for Discord:
-
-1. **Download the latest `.exe`** from the [Releases](https://github.com/BrunoMLG/ClipShrinker/releases) section.
-2. **Run the executable** and follow the simple GUI prompts:
-   - Select your input video.
-   - Choose the output location and file name.
-   - Click "Render" to compress the video.
-
-The application will automatically handle everything, ensuring that the video file is optimized to fit within Discord's 8 MB file size limit.
-
-## Purpose
-
-The primary goal of **ClipShrinker** is to help users compress video files to meet Discord’s upload restrictions. Videos on Discord are limited to a file size of **8 MB** for non-Nitro users. This tool automatically adjusts the video’s quality, size, and resolution, ensuring it fits within Discord’s constraints while maintaining acceptable video quality.
-
----
+Settings are stored in `%APPDATA%\ClipShrinker\config.json` on Windows and
+`~/.config/clipshrinker/config.json` on Linux.
