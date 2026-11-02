@@ -20,6 +20,8 @@ file ends up just under the limit without being cut short.
 - [Features](#features)
 - [Download and install](#download-and-install)
 - [How to use](#how-to-use)
+- [Trimming clips](#trimming-clips)
+- [Uploading to Discord](#uploading-to-discord)
 - [Presets](#presets)
 - [Settings reference](#settings-reference)
 - [Preferences](#preferences)
@@ -35,15 +37,16 @@ file ends up just under the limit without being cut short.
   - Add files or whole folders by drag & drop or the file picker.
   - Live progress, time remaining and final size for every clip.
   - Cancel, retry, reorder and remove clips, and encode several at once.
-- **15 built-in presets, plus your own**
-  - Discord (10 / 50 / 500 MB), WhatsApp, email, quality-based presets, AV1, VP9 WebM, GPU encoding.
+- **Auto-upload to Discord**: finished clips are posted to a channel through a webhook, with a clearly visible on/off switch.
+- **16 built-in presets, plus your own**
+  - Discord (20 / 10 / 50 / 500 MB), WhatsApp, email, quality-based presets, AV1, VP9 WebM, GPU encoding.
 - **Detailed settings**
   - **Mode:** target size, constant quality or fixed bitrate.
   - **Video:** H.264 / H.265 / AV1 / VP9, CPU or GPU encoding (NVIDIA, AMD, Intel, Apple), speed slider, two-pass.
   - **Resolution:** a cap, or *Auto*, which picks the best resolution for the size limit.
   - **Frame rate:** a cap.
   - **Audio:** codec, bitrate, mono, removing it, or **mixing every audio track into one** (handy for OBS recordings).
-- **Per-clip trimming**: encode only part of a clip.
+- **Trim with a preview**: scrub through the clip, watch it play, and drag the start and end handles on a filmstrip timeline.
 - **Size-limit safety net**: a clip that still comes out over the limit is re-encoded automatically with a lower bitrate. Clips already under the limit are skipped.
 - **Live size estimate** for the selected clip as you change settings.
 - **Notification** when the queue finishes. Settings are remembered between runs.
@@ -89,9 +92,10 @@ The AppImage runs on most distros from Ubuntu 22.04 / Debian 12 / Fedora 36 onwa
 
 1. **Add clips**: drag videos or folders onto the window, or click **＋ Add clips** /
    **Add folder**.
-2. **Pick a preset** in the panel on the right, e.g. *Discord (10 MB)*. Adjust any
+2. **Pick a preset** in the panel on the right, e.g. *Discord (20 MB)*. Adjust any
    setting if you like; the preset shows **● Modified** and *Reset* brings it back.
-3. **Click Start.** Clips are processed from top to bottom.
+3. **Click Start.** Clips are processed from top to bottom. If
+   [Discord upload](#uploading-to-discord) is on, the button reads **Start + upload**.
 4. Results are saved **next to the original file** as `name_shrunk.mp4` by default. You
    can change the folder and file name under *Output*.
 
@@ -100,8 +104,9 @@ Other tips:
 | Action | How |
 | --- | --- |
 | Change settings for clips already in the queue | Select them and click **Apply to selected clips** (with nothing selected, it applies to all waiting clips) |
-| Trim a clip | Double-click it, or right-click → **Details & trim…**, then enter a start and/or end (`0:12`, `1:05.5`, `90`) |
-| See why a clip failed | Double-click it to see the error and the full FFmpeg log |
+| Trim a clip | Double-click it, or right-click → **Trim…** (see [Trimming clips](#trimming-clips)) |
+| See why a clip failed | Right-click → **Details & log…** to see the error and the full FFmpeg log |
+| Post a finished clip to Discord | Right-click → **Upload to Discord** (works even when automatic upload is off) |
 | Reorder | Right-click → Move up/down, or `Ctrl+↑` / `Ctrl+↓` |
 | Remove clips | `Delete` key, or right-click → Remove |
 | Re-encode a finished clip | Right-click → **Encode again** |
@@ -111,11 +116,70 @@ Other tips:
 Supported inputs: `.mp4 .mkv .mov .avi .webm .m4v .flv .wmv .ts .mts .m2ts .3gp .mpg .mpeg`.
 Anything FFmpeg can read also works through *All files* in the file picker.
 
+## Trimming clips
+
+Double-click a clip (or right-click → **Trim…**) to open the trim editor.
+
+- **Preview:** the large frame shows the clip at the playhead. Click anywhere on the
+  timeline to jump there, or drag to scrub.
+- **Play** (or `Space`) plays the part you're keeping, from the playhead to the end
+  handle. The preview has no sound.
+- **Start and end:** drag the purple handles on either side of the filmstrip. The area
+  outside them is dimmed, and the label shows how much you're keeping.
+- **Set start / Set end** (or `I` / `O`) put the start or end at the playhead.
+- **Typing times** still works: enter `0:12`, `1:05.5` or `90` in the *Start* and *End*
+  fields.
+- `←` / `→` step one frame, and `Shift+←` / `Shift+→` jump one second. **Reset** keeps
+  the whole clip.
+
+Click **Save**. Trimmed clips show ✂ next to their name. Size targets apply to the
+trimmed length, so a shorter clip gets more quality for the same size. Saving a new trim
+on a clip that's already done encodes it again.
+
+## Uploading to Discord
+
+ClipShrinker can post every clip that finishes to a Discord channel through a
+**webhook**, so your clips land in the channel without you dragging files around.
+
+### Set it up
+
+1. In Discord, open **Server Settings → Integrations → Webhooks → New Webhook**, choose
+   the channel, then click **Copy Webhook URL**. You need *Manage Webhooks* permission on
+   that server.
+2. In ClipShrinker, click **⚙** next to the Discord switch (bottom right), paste the URL
+   and click **Test**. It should say *Connected* and show the webhook's name.
+3. Optionally change the **Message** posted with each clip: `{name}` = the clip's name,
+   `{size}` = its file size. Leave it empty to post only the video.
+4. Tick **Upload finished clips automatically** and click **Save**.
+
+### Avoiding accidental uploads
+
+- The **Discord upload** switch sits right next to **Start**, so you always see the
+  state before a run. When it's on it's highlighted and shows the webhook's name, and
+  **Start** changes to **Start + upload**.
+- Turning it on asks for confirmation. Turning it off is a single click and takes effect
+  immediately: clips that finish afterwards are not posted, even mid-queue.
+- Only clips that ClipShrinker compressed are uploaded. Skipped, failed and cancelled
+  clips never are.
+- Mentions such as `@everyone` are never triggered by the message or file name.
+
+Each clip's status shows the upload (*uploading 40%*, *sent to Discord*, or *Discord upload
+failed*, with the reason in the tooltip). Right-click a clip for **Open in Discord** or to
+**Upload to Discord** again. Uploads go out one at a time, in queue order.
+
+> **File size:** Discord rejects files larger than the server's upload limit. Use the
+> **Discord (20 MB)** preset, or **Discord (10 MB)** for servers that still have the
+> older limit. Boosted servers allow more.
+>
+> **Keep the webhook URL private.** Anyone with it can post to that channel. It is
+> stored in ClipShrinker's settings file on your computer and only sent to Discord.
+
 ## Presets
 
 | Preset | Mode | Details |
 | --- | --- | --- |
-| **Discord (10 MB)** | Target size 9.5 MB | H.264, auto resolution, max 60 fps, AAC 96 kbps |
+| **Discord (20 MB)** | Target size 19 MB | H.264, auto resolution, max 60 fps, AAC 128 kbps. The default. |
+| **Discord (10 MB)** | Target size 9.5 MB | H.264, auto resolution, max 60 fps, AAC 96 kbps. For the older limit. |
 | **Discord Nitro Basic (50 MB)** | Target size 48 MB | H.264, auto resolution, max 60 fps, AAC 128 kbps |
 | **Discord Nitro (500 MB)** | Target size 480 MB | H.264, up to 1440p, max 60 fps, AAC 160 kbps |
 | **WhatsApp / Messaging (16 MB)** | Target size 15 MB | H.264, auto resolution, max 30 fps |
@@ -379,12 +443,16 @@ clipshrinker/
   ffmpeg.py                  finding FFmpeg, probing files, detecting GPU encoders
   jobs.py                    the queue: runs FFmpeg via QProcess, progress, retries
   config.py                  user settings stored as JSON
+  discord.py                 Discord webhook client (stdlib HTTP, streamed uploads)
+  uploader.py                background upload queue for finished clips
   resources/                 icon and UI images
   ui/
     main_window.py           main window, top/bottom bars, actions
     queue_view.py            clip list with progress bars and drag & drop
     settings_panel.py        presets and all encoding settings
-    dialogs.py               Preferences and clip details/trim dialogs
+    dialogs.py               Preferences and clip dialog (trim + details tabs)
+    trim_editor.py           frame preview, filmstrip timeline, playback
+    discord_dialog.py        Discord webhook settings
     theme.py                 dark theme
 assets/                      Windows .ico and the Linux .desktop file
 tools/build_appimage.sh      packs the Linux build into an AppImage
@@ -394,6 +462,13 @@ tools/make_icon.py           regenerates the icon
 ```
 
 ## Troubleshooting
+
+**Discord upload failed.** Hover the clip's status to see why, then right-click →
+**Upload to Discord** to try again.
+- *Bigger than this server's upload limit*: use a smaller Discord preset and encode again.
+- *Webhook not found*: the webhook was deleted. Create a new one and paste it in the
+  Discord settings.
+- *Could not reach Discord*: check your internet connection or firewall.
 
 **A clip failed.** Double-click it to see the error and the FFmpeg log. Use *Copy log*
 to share it when reporting an issue.

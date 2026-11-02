@@ -52,6 +52,11 @@ class Job:
     log: List[str] = field(default_factory=list)
     started_at: float = 0.0
     finished_at: float = 0.0
+    # Discord upload: "", "queued", "uploading", "uploaded" or "failed"
+    upload_state: str = ""
+    upload_progress: float = 0.0
+    upload_message: str = ""
+    upload_link: str = ""
 
     @property
     def name(self) -> str:
@@ -69,6 +74,8 @@ class Job:
         self.eta = None
         self.speed = ""
         self.log.clear()
+        self.upload_state, self.upload_progress = "", 0.0
+        self.upload_message = self.upload_link = ""
 
 
 def resolve_output(src: str, settings: EncodeSettings, output_dir: str, template: str,
@@ -155,6 +162,7 @@ class JobQueue(QObject):
 
     job_added = Signal(object)
     job_changed = Signal(object)
+    job_finished = Signal(object)  # encoded successfully
     job_removed = Signal(object)
     running_changed = Signal(bool)
     queue_finished = Signal(int, int, int)  # done, failed, bytes saved
@@ -446,6 +454,7 @@ class JobQueue(QObject):
         if job.settings.mode == MODE_SIZE and size > target:
             job.message = "Still over the target size"
         self.job_changed.emit(job)
+        self.job_finished.emit(job)
         self._schedule()
 
     def _cleanup(self, run: _Run, remove_output: bool) -> None:

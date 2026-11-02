@@ -34,8 +34,13 @@ def _quality(crf: int, **kw) -> EncodeSettings:
 BUILTIN_PRESETS = [
     # --- Upload limits -------------------------------------------------------
     Preset(
-        "Discord (10 MB)",
+        "Discord (20 MB)",
         "Fits Discord's free upload limit. Resolution adapts to the clip length.",
+        _size(19, max_height=RES_AUTO, max_fps=60, audio_bitrate_kbps=128),
+    ),
+    Preset(
+        "Discord (10 MB)",
+        "The old free limit. Use it for servers or webhooks that still cap uploads at 10 MB.",
         _size(9.5, max_height=RES_AUTO, max_fps=60, audio_bitrate_kbps=96),
     ),
     Preset(

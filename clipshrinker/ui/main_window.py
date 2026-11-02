@@ -43,7 +43,9 @@ from clipshrinker.jobs import (
     resolve_output,
 )
 from clipshrinker.presets import BUILTIN_PRESETS, Preset
+from clipshrinker.uploader import QUEUED, UPLOADED, UPLOADING, DiscordUploader
 from clipshrinker.ui.dialogs import JobDialog, PreferencesDialog
+from clipshrinker.ui.discord_dialog import DiscordDialog
 from clipshrinker.ui.queue_view import QueueView
 from clipshrinker.ui.settings_panel import SettingsPanel
 
@@ -86,6 +88,7 @@ class MainWindow(QMainWindow):
         self.queue = JobQueue(ffmpeg, self)
         self.queue.output_resolver = self._resolve_output
         self._apply_queue_prefs()
+        self.uploader = DiscordUploader(self.queue.find, self)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -155,8 +158,16 @@ class MainWindow(QMainWindow):
         self.start_btn = QPushButton("Start")
         self.start_btn.setObjectName("Primary")
         self.start_btn.setMinimumWidth(130)
+        # Kept right next to Start, so it's obvious before every run whether clips will be posted.
+        self.discord_btn = QPushButton()
+        self.discord_btn.setCursor(Qt.PointingHandCursor)
+        self.discord_settings_btn = QPushButton("⚙")
+        self.discord_settings_btn.setObjectName("Flat")
+        self.discord_settings_btn.setToolTip("Discord upload settings")
         bl.addWidget(self.summary_label)
         bl.addWidget(self.overall, 1)
+        bl.addWidget(self.discord_btn)
+        bl.addWidget(self.discord_settings_btn)
         bl.addWidget(self.start_btn)
         root.addWidget(bottom)
 
@@ -172,6 +183,10 @@ class MainWindow(QMainWindow):
         self.clear_btn.clicked.connect(self.queue.clear_finished)
         self.prefs_btn.clicked.connect(self.open_preferences)
         self.start_btn.clicked.connect(self.toggle_queue)
+        self.discord_btn.clicked.connect(self.toggle_discord)
+        self.discord_settings_btn.clicked.connect(self.open_discord_settings)
+        self.uploader.job_changed.connect(self._on_job_changed)
+        self.queue.job_finished.connect(self._on_job_finished)
         self.view.files_dropped.connect(self.add_paths)
         self.view.itemSelectionChanged.connect(self._update_estimate)
         self.view.itemDoubleClicked.connect(lambda *_: self.show_details())
@@ -219,8 +234,71 @@ class MainWindow(QMainWindow):
         self._hw_signals.done.connect(self.panel.set_hardware_availability)
         QThreadPool.globalInstance().start(_HwDetect(ffmpeg, self._hw_signals))
 
+        self._refresh_discord()
         self._refresh_summary()
         self._update_estimate()
+
+    # ---- discord ---------------------------------------------------------------
+    @property
+    def discord_on(self) -> bool:
+        return self.config.discord_enabled and bool(self.config.discord_webhook)
+
+    def _refresh_discord(self) -> None:
+        on = self.discord_on
+        name = self.config.discord_webhook_name or "webhook"
+        if on:
+            self.discord_btn.setText(f"●  Discord upload ON · {name}")
+            self.discord_btn.setToolTip(f"Finished clips are posted to Discord as “{name}”. Click to turn off.")
+        else:
+            self.discord_btn.setText("Discord upload OFF")
+            self.discord_btn.setToolTip("Click to post finished clips to a Discord channel automatically."
+                                        if self.config.discord_webhook else "Set up a Discord webhook")
+        self.discord_btn.setObjectName("DiscordOn" if on else "DiscordOff")
+        self.discord_btn.style().unpolish(self.discord_btn)
+        self.discord_btn.style().polish(self.discord_btn)
+        self._on_running_changed(self.queue.is_running)
+
+    def toggle_discord(self) -> None:
+        if self.discord_on:
+            self.config.discord_enabled = False
+        elif not self.config.discord_webhook:
+            self.open_discord_settings(enable=True)
+            return
+        else:
+            name = self.config.discord_webhook_name or "the webhook's channel"
+            answer = QMessageBox.question(
+                self, "Discord upload",
+                f"Every clip that finishes from now on will be posted to Discord as “{name}”.\n\n"
+                "Turn on automatic upload?",
+            )
+            if answer != QMessageBox.Yes:
+                return
+            self.config.discord_enabled = True
+        self._refresh_discord()
+        self._save_config()
+
+    def open_discord_settings(self, enable: bool = False) -> None:
+        dialog = DiscordDialog(self.config, self)
+        if enable:
+            dialog.enable_check.setChecked(True)
+        if dialog.exec():
+            self._refresh_discord()
+            self._save_config()
+
+    def upload_to_discord(self, jobs: List[Job]) -> None:
+        if not self.config.discord_webhook:
+            self.open_discord_settings()
+            if not self.config.discord_webhook:
+                return
+        for job in jobs:
+            if job.status == DONE and os.path.exists(job.dst):
+                self.uploader.upload(job, job.dst, self.config.discord_webhook, self.config.discord_message,
+                                     self.config.discord_guild_id)
+
+    def _on_job_finished(self, job: Job) -> None:
+        # Decided the moment a clip finishes: turning the switch off stops all later uploads.
+        if self.discord_on:
+            self.upload_to_discord([job])
 
     # ---- presets -------------------------------------------------------------
     def _all_presets(self) -> List[Preset]:
@@ -334,13 +412,16 @@ class MainWindow(QMainWindow):
                 self.queue.update_job(job, settings.copy(), preset)
         self._update_estimate()
 
-    def show_details(self, job: Job = None) -> None:
+    def show_details(self, job: Job = None, tab: str = "") -> None:
         job = job or next(iter(self.view.selected_jobs()), None)
         if not job:
             return
-        dialog = JobDialog(job, self)
+        if not tab:
+            tab = "trim" if job.status not in (DONE,) and job.info and job.status != RUNNING else "details"
+        dialog = JobDialog(job, self.ffmpeg, self, tab=tab)
         if dialog.exec():
-            if job.is_finished and job.status != DONE:
+            # A new trim on a finished clip means it should be encoded again.
+            if job.is_finished and (job.status != DONE or dialog.trim_changed_on_save):
                 self.queue.retry(job)
             self.view.update_job(job)
             self._update_estimate()
@@ -365,7 +446,9 @@ class MainWindow(QMainWindow):
             return
         job = jobs[0]
         menu = QMenu(self)
-        menu.addAction("Details && trim…", lambda: self.show_details(job))
+        trim = menu.addAction("Trim…", lambda: self.show_details(job, "trim"))
+        trim.setEnabled(job.info is not None and job.status != RUNNING)
+        menu.addAction("Details && log…", lambda: self.show_details(job, "details"))
         menu.addAction("Open clip", lambda: _open_path(job.src))
         out = menu.addAction("Open result", lambda: _open_path(job.dst))
         out.setEnabled(job.status == DONE and os.path.exists(job.dst))
@@ -377,6 +460,13 @@ class MainWindow(QMainWindow):
         retry.setEnabled(any(j.is_finished for j in jobs))
         cancel = menu.addAction("Cancel", lambda: [self.queue.cancel(j) for j in jobs if not j.is_finished])
         cancel.setEnabled(any(j.status == RUNNING for j in jobs))
+        menu.addSeparator()
+        sendable = [j for j in jobs if j.status == DONE and j.upload_state not in (QUEUED, UPLOADING)]
+        send = menu.addAction("Upload to Discord" if not any(j.upload_state == UPLOADED for j in sendable)
+                              else "Upload to Discord again", lambda: self.upload_to_discord(sendable))
+        send.setEnabled(bool(sendable))
+        if job.upload_link:
+            menu.addAction("Open in Discord", lambda: QDesktopServices.openUrl(QUrl(job.upload_link)))
         menu.addSeparator()
         menu.addAction("Move up", lambda: self.move_selected(-1))
         menu.addAction("Move down", lambda: self.move_selected(1))
@@ -401,7 +491,7 @@ class MainWindow(QMainWindow):
         self._update_estimate()
 
     def _on_running_changed(self, running: bool) -> None:
-        self.start_btn.setText("Stop" if running else "Start")
+        self.start_btn.setText("Stop" if running else ("Start + upload" if self.discord_on else "Start"))
         self.start_btn.setObjectName("Danger" if running else "Primary")
         self.start_btn.style().unpolish(self.start_btn)
         self.start_btn.style().polish(self.start_btn)
@@ -443,6 +533,9 @@ class MainWindow(QMainWindow):
         failed = sum(1 for j in jobs if j.status == FAILED)
         if failed:
             text += f"  ·  {failed} failed"
+        sent = sum(1 for j in jobs if j.upload_state == UPLOADED)
+        if sent:
+            text += f"  ·  {sent} sent to Discord"
         self.summary_label.setText(text)
         progress = sum(1.0 if j.status in FINISHED_STATES else j.progress for j in jobs) / len(jobs)
         self.overall.setValue(int(progress * 1000))
@@ -513,7 +606,14 @@ class MainWindow(QMainWindow):
         ) != QMessageBox.Yes:
             event.ignore()
             return
+        uploading = any(j.upload_state in (QUEUED, UPLOADING) for j in self.queue.jobs)
+        if uploading and QMessageBox.question(
+            self, __app_name__, "Clips are still being uploaded to Discord. Quit anyway?"
+        ) != QMessageBox.Yes:
+            event.ignore()
+            return
         self.queue.shutdown()
+        self.uploader.shutdown()
         self._save_config()
         if self.tray is not None:
             self.tray.hide()

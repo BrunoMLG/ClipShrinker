@@ -46,6 +46,13 @@ class AppConfig:
     notify_when_done: bool = True
     ffmpeg_path: str = ""
 
+    # Discord webhook auto-upload
+    discord_enabled: bool = False
+    discord_webhook: str = ""
+    discord_message: str = "{name}"
+    discord_webhook_name: str = ""
+    discord_guild_id: str = ""
+
     last_open_dir: str = ""
     window_geometry: str = ""
     splitter_state: str = ""

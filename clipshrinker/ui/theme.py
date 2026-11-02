@@ -16,6 +16,7 @@ ACCENT_HOVER = "#8f81ff"
 SUCCESS = "#3ecf8e"
 WARNING = "#f5b544"
 DANGER = "#f2555a"
+DISCORD = "#5865f2"
 
 STYLE = f"""
 * {{
@@ -62,6 +63,15 @@ QPushButton#Danger {{
     background: {DANGER}; border: 1px solid {DANGER}; color: white; font-weight: 600;
     padding: 8px 22px;
 }}
+QPushButton#DiscordOff {{
+    background: transparent; border: 1px dashed #4a4d5e; color: {MUTED}; padding: 7px 14px;
+}}
+QPushButton#DiscordOff:hover {{ color: {TEXT}; border-color: {DISCORD}; }}
+QPushButton#DiscordOn {{
+    background: rgba(88, 101, 242, 0.18); border: 1px solid {DISCORD}; color: #dfe2ff;
+    font-weight: 600; padding: 7px 14px;
+}}
+QPushButton#DiscordOn:hover {{ background: rgba(88, 101, 242, 0.28); }}
 QPushButton#Flat {{ background: transparent; border: none; color: {MUTED}; padding: 6px 8px; }}
 QPushButton#Flat:hover {{ color: {TEXT}; background: {SURFACE_2}; }}
 QPushButton#Chip {{
@@ -151,6 +161,13 @@ QToolTip {{
     border-radius: 6px;
 }}
 QSplitter::handle {{ background: {BORDER}; }}
+QTabWidget::pane {{ border: none; border-top: 1px solid {BORDER}; }}
+QTabBar::tab {{
+    background: transparent; color: {MUTED}; padding: 8px 16px; border: none;
+    border-bottom: 2px solid transparent; margin-right: 4px;
+}}
+QTabBar::tab:selected {{ color: {TEXT}; border-bottom-color: {ACCENT}; font-weight: 600; }}
+QTabBar::tab:hover:!selected {{ color: {TEXT}; }}
 QMessageBox QLabel {{ color: {TEXT}; }}
 """
 
