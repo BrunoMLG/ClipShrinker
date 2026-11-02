@@ -54,7 +54,8 @@ file ends up just under the limit without being cut short.
 ## Download and install
 
 Download the latest version from the
-[Releases page](https://github.com/BrunoMLG/ClipShrinker/releases).
+[Releases page](https://github.com/BrunoMLG/ClipShrinker/releases). Each release lists
+what's new in that version.
 
 ### Windows
 
@@ -112,6 +113,7 @@ Other tips:
 | Re-encode a finished clip | Right-click → **Encode again** |
 | Clean the list | **Clear finished** in the top bar |
 | Open files from the command line | `ClipShrinker clip1.mp4 clip2.mkv some-folder/` |
+| See which FFmpeg and GPU encoders it uses | `ClipShrinker --diagnose` (prints to the terminal; see [Troubleshooting](#troubleshooting)) |
 
 Supported inputs: `.mp4 .mkv .mov .avi .webm .m4v .flv .wmv .ts .mts .m2ts .3gp .mpg .mpeg`.
 Anything FFmpeg can read also works through *All files* in the file picker.
@@ -382,7 +384,9 @@ started manually (**Actions → Build → Run workflow**). For both Windows and 
 1. installs Python 3.12 and the dependencies,
 2. runs the unit tests,
 3. builds with PyInstaller (and on Linux, packs the AppImage),
-4. on Linux, checks that the AppImage starts and that its bundled FFmpeg runs,
+4. on Linux, checks that the AppImage starts, that its bundled FFmpeg runs, and (with
+   `--diagnose`) that FFmpeg doesn't inherit the bundle's library path, which breaks GPU
+   drivers,
 5. uploads `ClipShrinker-windows-x64.exe` and `ClipShrinker-linux-x86_64.AppImage` as
    workflow artifacts (open the run in the **Actions** tab and look under *Artifacts*).
 
