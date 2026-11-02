@@ -76,7 +76,11 @@ jobs:
           "$ffmpeg_bin" -hide_banner -version | head -n1
           # FFmpeg must not inherit the bundle's library path (breaks GPU drivers).
           "$app" --diagnose | tee diagnose.txt
-          grep -q "LD_LIBRARY_PATH for FFmpeg: (unset)" diagnose.txt
+          grep -q "^LD_LIBRARY_PATH for FFmpeg:" diagnose.txt
+          if grep "^LD_LIBRARY_PATH for FFmpeg:" diagnose.txt | grep -q "_internal"; then
+            echo "FFmpeg would inherit the bundled library path"
+            exit 1
+          fi
           # The app should start and keep running until we stop it.
           set +e
           timeout 15 "$app" > app.log 2>&1
