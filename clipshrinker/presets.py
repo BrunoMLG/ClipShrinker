@@ -111,7 +111,7 @@ BUILTIN_PRESETS = [
     ),
     Preset(
         "Fast GPU (AMD)",
-        "Uses an AMD GPU for very fast H.264 encoding.",
+        "Uses an AMD GPU on Windows for very fast H.264 encoding. On Linux use the VA-API preset.",
         _quality(25, codec="h264", hardware="amf", speed=2, max_height=1080),
         category="Hardware",
     ),
@@ -119,6 +119,12 @@ BUILTIN_PRESETS = [
         "Fast GPU (Intel)",
         "Uses Intel Quick Sync for very fast H.264 encoding.",
         _quality(25, codec="h264", hardware="qsv", speed=2, max_height=1080),
+        category="Hardware",
+    ),
+    Preset(
+        "Fast GPU (Linux VA-API)",
+        "Uses an AMD or Intel GPU on Linux (Mesa drivers) for very fast H.264 encoding.",
+        _quality(25, codec="h264", hardware="vaapi", speed=2, max_height=1080),
         category="Hardware",
     ),
     Preset(

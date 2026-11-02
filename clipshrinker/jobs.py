@@ -12,7 +12,7 @@ from typing import Callable, Dict, List, Optional
 
 from PySide6.QtCore import QObject, QProcess, QRunnable, QThreadPool, Signal
 
-from clipshrinker.encode import MB, MODE_SIZE, EncodeSettings, Trim, build_plan, validate
+from clipshrinker.encode import DEFAULT_VAAPI_DEVICE, MB, MODE_SIZE, EncodeSettings, Trim, build_plan, validate
 from clipshrinker.ffmpeg import MediaInfo, probe
 
 PROBING = "probing"
@@ -174,6 +174,7 @@ class JobQueue(QObject):
         self.concurrency = 1
         self.skip_if_smaller = True
         self.retry_oversize = True
+        self.vaapi_device = DEFAULT_VAAPI_DEVICE
         self.output_resolver: Callable[[Job, set], Optional[str]] = lambda job, reserved: None
         self._runs: Dict[int, _Run] = {}
         self._running = False
@@ -354,7 +355,8 @@ class JobQueue(QObject):
     def _launch(self, run: _Run) -> None:
         job = run.job
         plan = build_plan(self.ffmpeg, job.info, job.settings, job.src, run.tmp_path,
-                          trim=job.trim, passlog=run.passlog, size_scale=run.size_scale)
+                          trim=job.trim, passlog=run.passlog, size_scale=run.size_scale,
+                          vaapi_device=self.vaapi_device)
         run.passes, run.pass_index, run.duration = plan.passes, 0, plan.duration
         for w in plan.warnings:
             job.log.append(f"[warning] {w}")

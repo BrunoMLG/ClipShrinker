@@ -38,11 +38,11 @@ file ends up just under the limit without being cut short.
   - Live progress, time remaining and final size for every clip.
   - Cancel, retry, reorder and remove clips, and encode several at once.
 - **Auto-upload to Discord**: finished clips are posted to a channel through a webhook, with a clearly visible on/off switch.
-- **16 built-in presets, plus your own**
+- **17 built-in presets, plus your own**
   - Discord (20 / 10 / 50 / 500 MB), WhatsApp, email, quality-based presets, AV1, VP9 WebM, GPU encoding.
 - **Detailed settings**
   - **Mode:** target size, constant quality or fixed bitrate.
-  - **Video:** H.264 / H.265 / AV1 / VP9, CPU or GPU encoding (NVIDIA, AMD, Intel, Apple), speed slider, two-pass.
+  - **Video:** H.264 / H.265 / AV1 / VP9, CPU or GPU encoding (NVIDIA, AMD and Intel on Windows and Linux, Apple), speed slider, two-pass.
   - **Resolution:** a cap, or *Auto*, which picks the best resolution for the size limit.
   - **Frame rate:** a cap.
   - **Audio:** codec, bitrate, mono, removing it, or **mixing every audio track into one** (handy for OBS recordings).
@@ -190,7 +190,8 @@ failed*, with the reason in the tooltip). Right-click a clip for **Open in Disco
 | **Tiny** | Quality 32 | H.265, 480p, 30 fps, mono 48 kbps |
 | **Archive (AV1)** | Quality 30 | AV1 (SVT-AV1), original resolution, Opus, `.mkv` |
 | **Web (VP9 WebM)** | Quality 33 | VP9, up to 1080p, Opus, `.webm` |
-| **Fast GPU (NVIDIA / AMD / Intel)** | Quality 25 | Hardware H.264, up to 1080p |
+| **Fast GPU (NVIDIA / AMD / Intel)** | Quality 25 | Hardware H.264, up to 1080p. The AMD (AMF) one is for Windows. |
+| **Fast GPU (Linux VA-API)** | Quality 25 | Hardware H.264 on AMD or Intel GPUs on Linux, up to 1080p |
 | **Classic ClipShrinker** | Bitrate 4000 kbps | The original 1.x settings: 720p, 60 fps, AAC 96 kbps |
 
 Size-limit presets aim a little below the real limit to leave a safety margin.
@@ -215,7 +216,7 @@ presets appear under *My presets* and can be deleted with **Delete**.
 | Setting | Notes |
 | --- | --- |
 | **Codec** | **H.264** plays everywhere. **H.265** is ~30–40% smaller at the same quality but some older devices and browsers can't play it. **AV1** is the smallest but encodes slowly. **VP9** is for WebM/web use. |
-| **Encoder** | *CPU* gives the best quality per MB. *NVIDIA NVENC*, *Intel Quick Sync*, *AMD AMF* and *Apple VideoToolbox* are much faster but slightly less efficient. ClipShrinker tests each one at startup and marks missing ones *(not detected)*. |
+| **Encoder** | *CPU* gives the best quality per MB. The GPU encoders are much faster (often 5× or more) but slightly less efficient: *NVIDIA NVENC*, *Intel Quick Sync*, *AMD AMF* (Windows), *VA-API* (AMD and Intel GPUs on **Linux**), and *Apple VideoToolbox*. ClipShrinker tests each one at startup and marks missing ones *(not detected)*. |
 | **Speed** | Fastest → Slowest. Slower = smaller file / better quality for the same size. |
 | **Resolution** | *Auto* (only in Target size mode) picks the highest resolution the size budget can support, e.g. a 30 s clip stays 1080p and a 5 min clip drops to 480p. *Original* keeps the source size. Other values are a maximum; clips are never upscaled. For portrait videos the limit applies to the short side. |
 | **Frame rate** | A maximum; lower-fps sources are left alone. Dropping 60 → 30 fps frees a lot of bitrate for long clips. |
@@ -474,8 +475,13 @@ tools/make_icon.py           regenerates the icon
 to share it when reporting an issue.
 
 **A GPU encoder shows "(not detected)".** That GPU or its driver isn't available.
-Update the graphics driver, or use *CPU (software)*. On Linux, NVENC needs the
-proprietary NVIDIA driver.
+Update the graphics driver, or use *CPU (software)*.
+- **AMD or Intel on Linux:** use **VA-API**, not *AMD AMF* or *Intel Quick Sync*. Those
+  need vendor-specific driver stacks, while VA-API works with the standard Mesa (AMD) and
+  `intel-media-driver` (Intel) drivers most distros ship. If VA-API is also *not detected*,
+  install your distro's VA-API driver package (for example `mesa` /
+  `libva-mesa-driver`, or `intel-media-driver`). Check that `/dev/dri/renderD128` exists.
+- **NVIDIA on Linux:** NVENC needs the proprietary NVIDIA driver.
 
 **The output is slightly over the limit / quality is poor in Target size mode.** Very long
 clips leave very little bitrate per second. Lower the frame rate to 30 fps, keep
