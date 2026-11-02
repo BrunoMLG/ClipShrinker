@@ -8,6 +8,8 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
+    QTabWidget,
+    QWidget,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -23,8 +25,9 @@ from PySide6.QtWidgets import (
 )
 
 from clipshrinker.config import AppConfig
-from clipshrinker.encode import CODECS, HARDWARE, MODE_BITRATE, MODE_QUALITY, Trim
-from clipshrinker.ffmpeg import find_ffmpeg, format_duration, format_size, parse_timecode
+from clipshrinker.encode import CODECS, HARDWARE, MODE_BITRATE, MODE_QUALITY
+from clipshrinker.ffmpeg import find_ffmpeg, format_duration, format_size
+from clipshrinker.ui.trim_editor import TrimEditor
 from clipshrinker.jobs import DONE, RUNNING, Job
 
 
@@ -117,25 +120,16 @@ def describe_settings(job: Job) -> str:
             f"{audio} · .{s.container}")
 
 
-def _format_time(seconds) -> str:
-    if seconds is None:
-        return ""
-    minutes, secs = divmod(seconds, 60)
-    if secs == int(secs):
-        return f"{int(minutes)}:{int(secs):02d}"
-    return f"{int(minutes)}:{secs:06.3f}".rstrip("0")
-
-
 class JobDialog(QDialog):
-    """Details for one clip: info, trimming, output and the FFmpeg log."""
+    """One clip: a trim editor with preview, plus details and the FFmpeg log."""
 
-    def __init__(self, job: Job, parent=None):
+    def __init__(self, job: Job, ffmpeg: str, parent=None, tab: str = "trim"):
         super().__init__(parent)
         self.job = job
         self.setWindowTitle(job.name)
-        self.resize(680, 560)
+        self.resize(860, 760)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(20, 20, 20, 16)
+        lay.setContentsMargins(20, 18, 20, 16)
         lay.setSpacing(12)
 
         title = QLabel(job.name)
@@ -143,6 +137,29 @@ class JobDialog(QDialog):
         title.setWordWrap(True)
         lay.addWidget(title)
 
+        self.tabs = QTabWidget()
+        lay.addWidget(self.tabs, 1)
+
+        # ---- trim ------------------------------------------------------------
+        self.editor = None
+        self.trim_changed_on_save = False
+        if job.info and job.status != RUNNING:
+            self.editor = TrimEditor(ffmpeg, job.src, job.info, job.trim)
+            trim_page = QWidget()
+            tl = QVBoxLayout(trim_page)
+            tl.setContentsMargins(0, 12, 0, 0)
+            tl.addWidget(self.editor)
+            if job.status == DONE:
+                note = QLabel("This clip is already compressed. Saving a new trim encodes it again.")
+                note.setObjectName("Warning")
+                tl.addWidget(note)
+            self.tabs.addTab(trim_page, "Trim")
+
+        # ---- details -----------------------------------------------------------
+        details = QWidget()
+        dl = QVBoxLayout(details)
+        dl.setContentsMargins(0, 12, 0, 0)
+        dl.setSpacing(10)
         info = job.info
         form = QFormLayout()
         form.setVerticalSpacing(6)
@@ -164,34 +181,18 @@ class JobDialog(QDialog):
             add("Output", job.dst + (f"  ({format_size(job.out_size)})" if job.out_size else ""))
         if job.message:
             add("Status", job.message)
-        lay.addLayout(form)
-
-        trim_row = QHBoxLayout()
-        self.start_edit = QLineEdit(_format_time(job.trim.start))
-        self.end_edit = QLineEdit(_format_time(job.trim.end))
-        self.start_edit.setPlaceholderText("start (e.g. 0:12)")
-        self.end_edit.setPlaceholderText("end (e.g. 1:05)")
-        trim_label = QLabel("Trim")
-        trim_row.addWidget(trim_label)
-        trim_row.addWidget(self.start_edit)
-        trim_row.addWidget(QLabel("→"))
-        trim_row.addWidget(self.end_edit)
-        editable = job.status != RUNNING
-        self.start_edit.setEnabled(editable)
-        self.end_edit.setEnabled(editable)
-        lay.addLayout(trim_row)
-        hint = QLabel("Only encode part of the clip. Leave empty to keep the whole thing. "
-                      "Size targets apply to the trimmed length.")
-        hint.setObjectName("Hint")
-        hint.setWordWrap(True)
-        lay.addWidget(hint)
-
+        if job.upload_message:
+            add("Discord", job.upload_message)
+        dl.addLayout(form)
         log_label = QLabel("FFMPEG LOG")
         log_label.setObjectName("SectionTitle")
-        lay.addWidget(log_label)
+        dl.addWidget(log_label)
         self.log = QPlainTextEdit("\n".join(job.log) or "Nothing yet - the log appears once encoding starts.")
         self.log.setReadOnly(True)
-        lay.addWidget(self.log, 1)
+        dl.addWidget(self.log, 1)
+        self.tabs.addTab(details, "Details && log")
+        if tab == "details" or self.editor is None:
+            self.tabs.setCurrentWidget(details)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         copy_btn = buttons.addButton("Copy log", QDialogButtonBox.ActionRole)
@@ -203,19 +204,27 @@ class JobDialog(QDialog):
         buttons.rejected.connect(self.reject)
         lay.addWidget(buttons)
 
+    @property
+    def trim_changed(self) -> bool:
+        return self.editor is not None and self.editor.trim() != self.job.trim
+
     def accept(self) -> None:
-        try:
-            start = parse_timecode(self.start_edit.text())
-            end = parse_timecode(self.end_edit.text())
-        except ValueError as exc:
-            QMessageBox.warning(self, "Trim", str(exc))
-            return
-        duration = self.job.info.duration if self.job.info else 0
-        if start is not None and end is not None and end <= start:
-            QMessageBox.warning(self, "Trim", "The end time must be after the start time.")
-            return
-        if duration and start is not None and start >= duration:
-            QMessageBox.warning(self, "Trim", "The start time is past the end of the clip.")
-            return
-        self.job.trim = Trim(start or None, end)
+        if self.editor is not None:
+            err = self.editor.validate()
+            if err:
+                self.tabs.setCurrentIndex(0)
+                QMessageBox.warning(self, "Trim", err)
+                return
+        self.trim_changed_on_save = self.trim_changed
+        if self.trim_changed_on_save:
+            self.job.trim = self.editor.trim()
+        self._shutdown()
         super().accept()
+
+    def reject(self) -> None:
+        self._shutdown()
+        super().reject()
+
+    def _shutdown(self) -> None:
+        if self.editor is not None:
+            self.editor.shutdown()

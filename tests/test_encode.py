@@ -152,3 +152,60 @@ def test_resolve_output(tmp_path):
     assert resolve_output(str(src), s, "", "{name}_shrunk", "skip", set()) is None
     # Never overwrite the source itself.
     assert resolve_output(str(src), s, "", "{name}", "overwrite", set()).endswith("clip_1.mp4")
+
+
+def test_vaapi_size_mode():
+    s = EncodeSettings(mode=MODE_SIZE, target_size_mb=19, hardware="vaapi", max_height=720)
+    plan = build_plan("ffmpeg", INFO, s, "in.mp4", "out.mp4", vaapi_device="/dev/dri/renderD129")
+    assert len(plan.passes) == 1
+    cmd = plan.passes[0]
+    assert cmd[cmd.index("-vaapi_device") + 1] == "/dev/dri/renderD129"
+    assert cmd.index("-vaapi_device") < cmd.index("-i")
+    assert cmd[cmd.index("-c:v") + 1] == "h264_vaapi"
+    assert cmd[cmd.index("-rc_mode") + 1] == "VBR"
+    # Scaling happens before the frames are uploaded to the GPU.
+    assert cmd[cmd.index("-vf") + 1] == "scale=-2:720:out_range=tv,format=nv12,hwupload"
+    assert "-pix_fmt" not in cmd
+
+
+def test_vaapi_quality_mode_and_av1_scale():
+    s = EncodeSettings(mode=MODE_QUALITY, crf=25, codec="h265", hardware="vaapi", max_height=RES_KEEP)
+    cmd = build_plan("ffmpeg", INFO, s, "a", "b").passes[0]
+    assert cmd[cmd.index("-qp") + 1] == "25"
+    assert cmd[cmd.index("-vf") + 1] == "scale=out_range=tv,format=nv12,hwupload"
+    s = s.copy(codec="av1", crf=30)
+    cmd = build_plan("ffmpeg", INFO, s, "a", "b").passes[0]
+    assert cmd[cmd.index("-c:v") + 1] == "av1_vaapi"
+    assert cmd[cmd.index("-qp") + 1] == "120"
+
+
+def test_vaapi_with_audio_mix_uses_filter_complex():
+    info = MediaInfo(duration=60, width=1920, height=1080, fps=60, audio_streams=2)
+    s = EncodeSettings(mode=MODE_SIZE, hardware="vaapi", audio_tracks="mix", max_height=RES_KEEP)
+    cmd = build_plan("ffmpeg", info, s, "a", "b").passes[0]
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert graph.startswith("[0:v:0]scale=out_range=tv,format=nv12,hwupload[vout];")
+
+
+def test_vaapi_vp9_is_rejected():
+    assert validate(EncodeSettings(codec="vp9", hardware="vaapi", container="webm", audio_codec="opus"))
+
+
+def test_restore_child_environment(monkeypatch):
+    import sys as _sys
+
+    from clipshrinker.ffmpeg import restore_child_environment
+
+    monkeypatch.setattr(_sys, "frozen", True, raising=False)
+    monkeypatch.setattr(_sys, "platform", "linux")
+    # Bootloader set a path, and there was none before: remove it.
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/.mount_x/_internal")
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
+    restore_child_environment()
+    assert "LD_LIBRARY_PATH" not in os.environ
+    # The user had their own path: put it back.
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/.mount_x/_internal")
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/opt/mylibs")
+    restore_child_environment()
+    assert os.environ["LD_LIBRARY_PATH"] == "/opt/mylibs"
+    assert "LD_LIBRARY_PATH_ORIG" not in os.environ

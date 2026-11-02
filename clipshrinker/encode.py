@@ -26,8 +26,12 @@ HARDWARE = {
     "nvenc": "NVIDIA NVENC",
     "qsv": "Intel Quick Sync",
     "amf": "AMD AMF",
+    "vaapi": "VA-API (AMD / Intel on Linux)",
     "videotoolbox": "Apple VideoToolbox",
 }
+
+# Render node used for VA-API when none was detected (the first GPU on most systems).
+DEFAULT_VAAPI_DEVICE = "/dev/dri/renderD128"
 
 ENCODERS = {
     ("h264", "cpu"): "libx264",
@@ -46,6 +50,9 @@ ENCODERS = {
     ("av1", "amf"): "av1_amf",
     ("h264", "videotoolbox"): "h264_videotoolbox",
     ("h265", "videotoolbox"): "hevc_videotoolbox",
+    ("h264", "vaapi"): "h264_vaapi",
+    ("h265", "vaapi"): "hevc_vaapi",
+    ("av1", "vaapi"): "av1_vaapi",
 }
 
 SPEEDS = ["Fastest", "Fast", "Balanced", "Slow", "Slowest"]
@@ -222,6 +229,10 @@ def _quality_args(settings: EncodeSettings) -> List[str]:
         return ["-global_quality", str(q)]
     if enc.endswith("_amf"):
         return ["-rc", "cqp", "-qp_i", str(q), "-qp_p", str(q), "-qp_b", str(q)]
+    if enc.endswith("_vaapi"):
+        # AV1 quantizers run 0-255 instead of 0-51/63, so scale the CRF-style value.
+        qp = q * 4 if enc == "av1_vaapi" else q
+        return ["-rc_mode", "CQP", "-qp", str(qp)]
     if enc.endswith("_videotoolbox"):
         # VideoToolbox quality is 1-100 where higher is better.
         return ["-q:v", str(max(1, min(100, 100 - q * 2)))]
@@ -236,6 +247,8 @@ def _bitrate_args(settings: EncodeSettings, kbps: int) -> List[str]:
         args += ["-maxrate", f"{int(kbps * 1.5)}k", "-bufsize", f"{kbps * 2}k"]
     elif enc.endswith("_nvenc"):
         args = ["-rc", "vbr"] + args + ["-maxrate", f"{int(kbps * 1.2)}k", "-bufsize", f"{kbps * 2}k"]
+    elif enc.endswith("_vaapi"):
+        args = ["-rc_mode", "VBR"] + args + ["-maxrate", f"{int(kbps * 1.1)}k", "-bufsize", f"{kbps * 2}k"]
     elif not settings.is_software:
         args += ["-maxrate", f"{int(kbps * 1.1)}k", "-bufsize", f"{kbps * 2}k"]
     return args
@@ -271,6 +284,7 @@ def build_plan(
     trim: Optional[Trim] = None,
     passlog: str = "",
     size_scale: float = 1.0,
+    vaapi_device: str = DEFAULT_VAAPI_DEVICE,
 ) -> EncodePlan:
     """Translate settings into the FFmpeg command(s) for one file.
 
@@ -311,6 +325,8 @@ def build_plan(
         plan.estimated_bytes = int((video_kbps + audio_kbps) * 1000 / 8 * duration)
 
     head = [ffmpeg, "-hide_banner", "-nostdin", "-y", "-v", "warning", "-progress", "pipe:1", "-nostats"]
+    if settings.hardware == "vaapi":
+        head += ["-vaapi_device", vaapi_device]
     if trim.start:
         head += ["-ss", f"{trim.start:.3f}"]
     head += ["-i", src]
@@ -330,6 +346,15 @@ def build_plan(
         video += ["-tag:v", "hvc1"]  # lets Apple devices play HEVC in MP4
 
     vf = _video_filters(settings, info, height)
+    if settings.hardware == "vaapi":
+        # Scale/fps on the CPU, then hand NV12 frames to the GPU encoder. Unlike the CPU
+        # encoders, nothing else converts full-range input (Steam/OBS recordings) to the
+        # standard TV range, so do it in the scaler.
+        if vf and vf[0].startswith("scale="):
+            vf[0] += ":out_range=tv"
+        else:
+            vf.append("scale=out_range=tv")
+        vf += ["format=nv12", "hwupload"]
 
     mix_audio = (
         settings.audio_tracks == "mix" and info.audio_streams > 1 and settings.audio_codec not in ("none", "copy")

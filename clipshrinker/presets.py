@@ -34,8 +34,13 @@ def _quality(crf: int, **kw) -> EncodeSettings:
 BUILTIN_PRESETS = [
     # --- Upload limits -------------------------------------------------------
     Preset(
-        "Discord (10 MB)",
+        "Discord (20 MB)",
         "Fits Discord's free upload limit. Resolution adapts to the clip length.",
+        _size(19, max_height=RES_AUTO, max_fps=60, audio_bitrate_kbps=128),
+    ),
+    Preset(
+        "Discord (10 MB)",
+        "The old free limit. Use it for servers or webhooks that still cap uploads at 10 MB.",
         _size(9.5, max_height=RES_AUTO, max_fps=60, audio_bitrate_kbps=96),
     ),
     Preset(
@@ -106,7 +111,7 @@ BUILTIN_PRESETS = [
     ),
     Preset(
         "Fast GPU (AMD)",
-        "Uses an AMD GPU for very fast H.264 encoding.",
+        "Uses an AMD GPU on Windows for very fast H.264 encoding. On Linux use the VA-API preset.",
         _quality(25, codec="h264", hardware="amf", speed=2, max_height=1080),
         category="Hardware",
     ),
@@ -114,6 +119,12 @@ BUILTIN_PRESETS = [
         "Fast GPU (Intel)",
         "Uses Intel Quick Sync for very fast H.264 encoding.",
         _quality(25, codec="h264", hardware="qsv", speed=2, max_height=1080),
+        category="Hardware",
+    ),
+    Preset(
+        "Fast GPU (Linux VA-API)",
+        "Uses an AMD or Intel GPU on Linux (Mesa drivers) for very fast H.264 encoding.",
+        _quality(25, codec="h264", hardware="vaapi", speed=2, max_height=1080),
         category="Hardware",
     ),
     Preset(

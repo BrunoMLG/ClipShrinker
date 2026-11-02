@@ -35,7 +35,22 @@ def status_text(job: Job) -> str:
         if job.eta is not None:
             parts.append(f"{format_duration(job.eta) if job.eta >= 1 else '0:01'} left")
         return " · ".join(parts)
+    if job.status == DONE and job.upload_state:
+        return {
+            "queued": "Done · waiting to upload",
+            "uploading": f"Done · uploading {job.upload_progress * 100:.0f}%",
+            "uploaded": "Done · sent to Discord",
+            "failed": "Done · Discord upload failed",
+        }.get(job.upload_state, "Done")
     return {DONE: "Done", FAILED: "Failed", SKIPPED: "Skipped", CANCELLED: "Cancelled"}[job.status]
+
+
+def _status_color(job: Job) -> str:
+    if job.status == DONE and job.upload_state in ("queued", "uploading", "uploaded"):
+        return theme.DISCORD
+    if job.status == DONE and job.upload_state == "failed":
+        return theme.WARNING
+    return STATUS_COLORS.get(job.status, theme.ACCENT)
 
 
 def scaled_font(font: QFont, factor: float) -> QFont:
@@ -68,12 +83,15 @@ class ProgressDelegate(QStyledItemDelegate):
         progress = job.progress if job.status in (RUNNING, DONE, SKIPPED) else 0
         if job.status == FAILED:
             progress = 1
+        if job.status == DONE and job.upload_state in ("queued", "uploading"):
+            progress = job.upload_progress
         if progress > 0:
             fill = QPainterPath()
             fill.addRoundedRect(QRectF(bar.left(), bar.top(), max(4.0, bar.width() * progress), bar.height()), 2, 2)
-            painter.fillPath(fill, QColor(STATUS_COLORS.get(job.status, theme.ACCENT)))
+            painter.fillPath(fill, QColor(_status_color(job)))
         text_rect = QRectF(r.left(), r.top() + 3, r.width(), r.height() / 2 + 2)
-        color = STATUS_COLORS.get(job.status, theme.MUTED) if job.status != RUNNING else theme.TEXT
+        color = _status_color(job) if job.status not in (RUNNING, PROBING, READY) else (
+            theme.TEXT if job.status == RUNNING else theme.MUTED)
         painter.setPen(QPen(QColor(color)))
         painter.setFont(scaled_font(option.font, 0.92))
         label = status_text(job)
@@ -155,6 +173,8 @@ class QueueView(QTreeWidget):
             item.setText(COL_RESULT, f"{format_size(job.out_size)}  ({-saved * 100:+.0f}%)")
             item.setForeground(COL_RESULT, QColor(theme.SUCCESS if saved > 0 else theme.WARNING))
             item.setToolTip(COL_RESULT, job.dst + (f"\n{job.message}" if job.message else ""))
+            if job.upload_message:
+                item.setToolTip(COL_STATUS, job.upload_message)
         elif job.status in (FAILED, SKIPPED):
             item.setText(COL_RESULT, job.message)
             item.setForeground(COL_RESULT, QColor(theme.DANGER if job.status == FAILED else theme.MUTED))

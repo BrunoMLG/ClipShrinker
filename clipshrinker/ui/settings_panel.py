@@ -52,7 +52,7 @@ RESOLUTIONS = [(RES_AUTO, "Auto (fit the size)"), (RES_KEEP, "Original")] + [
 FRAMERATES = [(0, "Original")] + [(f, f"{f:g} fps") for f in (120, 60, 50, 30, 25, 24, 15)]
 AUDIO_BITRATES = [32, 48, 64, 96, 128, 160, 192, 256, 320]
 CHANNELS = [(0, "Original"), (2, "Stereo"), (1, "Mono")]
-SIZE_CHIPS = [("10 MB", 9.5), ("25 MB", 23.5), ("50 MB", 48), ("100 MB", 96), ("500 MB", 480)]
+SIZE_CHIPS = [("10 MB", 9.5), ("20 MB", 19), ("50 MB", 48), ("100 MB", 96), ("500 MB", 480)]
 
 
 def make_combo(items) -> QComboBox:

@@ -12,7 +12,7 @@ from typing import Callable, Dict, List, Optional
 
 from PySide6.QtCore import QObject, QProcess, QRunnable, QThreadPool, Signal
 
-from clipshrinker.encode import MB, MODE_SIZE, EncodeSettings, Trim, build_plan, validate
+from clipshrinker.encode import DEFAULT_VAAPI_DEVICE, MB, MODE_SIZE, EncodeSettings, Trim, build_plan, validate
 from clipshrinker.ffmpeg import MediaInfo, probe
 
 PROBING = "probing"
@@ -52,6 +52,11 @@ class Job:
     log: List[str] = field(default_factory=list)
     started_at: float = 0.0
     finished_at: float = 0.0
+    # Discord upload: "", "queued", "uploading", "uploaded" or "failed"
+    upload_state: str = ""
+    upload_progress: float = 0.0
+    upload_message: str = ""
+    upload_link: str = ""
 
     @property
     def name(self) -> str:
@@ -69,6 +74,8 @@ class Job:
         self.eta = None
         self.speed = ""
         self.log.clear()
+        self.upload_state, self.upload_progress = "", 0.0
+        self.upload_message = self.upload_link = ""
 
 
 def resolve_output(src: str, settings: EncodeSettings, output_dir: str, template: str,
@@ -155,6 +162,7 @@ class JobQueue(QObject):
 
     job_added = Signal(object)
     job_changed = Signal(object)
+    job_finished = Signal(object)  # encoded successfully
     job_removed = Signal(object)
     running_changed = Signal(bool)
     queue_finished = Signal(int, int, int)  # done, failed, bytes saved
@@ -166,6 +174,7 @@ class JobQueue(QObject):
         self.concurrency = 1
         self.skip_if_smaller = True
         self.retry_oversize = True
+        self.vaapi_device = DEFAULT_VAAPI_DEVICE
         self.output_resolver: Callable[[Job, set], Optional[str]] = lambda job, reserved: None
         self._runs: Dict[int, _Run] = {}
         self._running = False
@@ -346,7 +355,8 @@ class JobQueue(QObject):
     def _launch(self, run: _Run) -> None:
         job = run.job
         plan = build_plan(self.ffmpeg, job.info, job.settings, job.src, run.tmp_path,
-                          trim=job.trim, passlog=run.passlog, size_scale=run.size_scale)
+                          trim=job.trim, passlog=run.passlog, size_scale=run.size_scale,
+                          vaapi_device=self.vaapi_device)
         run.passes, run.pass_index, run.duration = plan.passes, 0, plan.duration
         for w in plan.warnings:
             job.log.append(f"[warning] {w}")
@@ -446,6 +456,7 @@ class JobQueue(QObject):
         if job.settings.mode == MODE_SIZE and size > target:
             job.message = "Still over the target size"
         self.job_changed.emit(job)
+        self.job_finished.emit(job)
         self._schedule()
 
     def _cleanup(self, run: _Run, remove_output: bool) -> None:

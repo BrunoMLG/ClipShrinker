@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import glob
 import os
 import re
 import shutil
@@ -132,17 +133,21 @@ def available_encoders(ffmpeg: str) -> frozenset:
 
 
 @lru_cache(maxsize=32)
-def encoder_works(ffmpeg: str, encoder: str) -> bool:
+def encoder_works(ffmpeg: str, encoder: str, vaapi_device: str = "") -> bool:
     """Hardware encoders can be compiled in yet unusable (no GPU / driver).
 
     Encode a handful of blank frames to find out for sure.
     """
+    pre, vf = [], []
+    if vaapi_device:
+        pre = ["-vaapi_device", vaapi_device]
+        vf = ["-vf", "format=nv12,hwupload"]
     try:
         proc = subprocess.run(
             [
-                ffmpeg, "-hide_banner", "-loglevel", "error",
+                ffmpeg, "-hide_banner", "-loglevel", "error", *pre,
                 "-f", "lavfi", "-i", "color=black:s=256x256:r=30",
-                "-frames:v", "5", "-c:v", encoder, "-f", "null", "-",
+                "-frames:v", "5", *vf, "-c:v", encoder, "-f", "null", "-",
             ],
             capture_output=True,
             timeout=20,
@@ -151,6 +156,54 @@ def encoder_works(ffmpeg: str, encoder: str) -> bool:
         return proc.returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
+
+
+def find_vaapi_device(ffmpeg: str) -> str:
+    """First GPU render node that can encode H.264 or HEVC through VA-API ("" if none).
+
+    Machines with an integrated and a dedicated GPU have several nodes, and not every
+    one of them can encode.
+    """
+    if not sys.platform.startswith("linux"):
+        return ""
+    for node in sorted(glob.glob("/dev/dri/renderD*")):
+        if os.access(node, os.R_OK | os.W_OK) and any(
+            encoder_works(ffmpeg, enc, node) for enc in ("h264_vaapi", "hevc_vaapi")
+        ):
+            return node
+    return ""
+
+
+HW_KINDS = ("nvenc", "qsv", "amf", "videotoolbox")
+
+
+def detect_hardware(ffmpeg: str):
+    """({hardware: works}, vaapi render node or "") for every GPU encoder family."""
+    compiled = available_encoders(ffmpeg)
+    result = {"cpu": True}
+    for hw in HW_KINDS:
+        enc = f"h264_{hw}"
+        result[hw] = enc in compiled and encoder_works(ffmpeg, enc)
+    device = find_vaapi_device(ffmpeg) if {"h264_vaapi", "hevc_vaapi"} & compiled else ""
+    result["vaapi"] = bool(device)
+    return result, device
+
+
+def restore_child_environment() -> None:
+    """Give programs we launch the system's library path, not the bundle's.
+
+    In a frozen Linux build the PyInstaller bootloader points LD_LIBRARY_PATH at the
+    bundled libraries. FFmpeg inherits that, and the GPU driver it loads for VA-API
+    (Mesa) then picks up the bundle's older libraries and fails to initialize. The app
+    itself is unaffected: the loader reads LD_LIBRARY_PATH only when a process starts.
+    """
+    if not getattr(sys, "frozen", False) or not sys.platform.startswith("linux"):
+        return
+    original = os.environ.pop("LD_LIBRARY_PATH_ORIG", None)
+    if original:
+        os.environ["LD_LIBRARY_PATH"] = original
+    else:
+        os.environ.pop("LD_LIBRARY_PATH", None)
 
 
 def format_size(num_bytes: Optional[float]) -> str:
