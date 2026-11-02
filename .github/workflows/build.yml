@@ -74,6 +74,9 @@ jobs:
           ffmpeg_bin=$(find build/squashfs-root -path '*imageio_ffmpeg/binaries/ffmpeg-*' -type f | head -n1)
           test -n "$ffmpeg_bin"
           "$ffmpeg_bin" -hide_banner -version | head -n1
+          # FFmpeg must not inherit the bundle's library path (breaks GPU drivers).
+          "$app" --diagnose | tee diagnose.txt
+          grep -q "LD_LIBRARY_PATH for FFmpeg: (unset)" diagnose.txt
           # The app should start and keep running until we stop it.
           set +e
           timeout 15 "$app" > app.log 2>&1

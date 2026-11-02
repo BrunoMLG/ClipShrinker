@@ -174,6 +174,38 @@ def find_vaapi_device(ffmpeg: str) -> str:
     return ""
 
 
+HW_KINDS = ("nvenc", "qsv", "amf", "videotoolbox")
+
+
+def detect_hardware(ffmpeg: str):
+    """({hardware: works}, vaapi render node or "") for every GPU encoder family."""
+    compiled = available_encoders(ffmpeg)
+    result = {"cpu": True}
+    for hw in HW_KINDS:
+        enc = f"h264_{hw}"
+        result[hw] = enc in compiled and encoder_works(ffmpeg, enc)
+    device = find_vaapi_device(ffmpeg) if {"h264_vaapi", "hevc_vaapi"} & compiled else ""
+    result["vaapi"] = bool(device)
+    return result, device
+
+
+def restore_child_environment() -> None:
+    """Give programs we launch the system's library path, not the bundle's.
+
+    In a frozen Linux build the PyInstaller bootloader points LD_LIBRARY_PATH at the
+    bundled libraries. FFmpeg inherits that, and the GPU driver it loads for VA-API
+    (Mesa) then picks up the bundle's older libraries and fails to initialize. The app
+    itself is unaffected: the loader reads LD_LIBRARY_PATH only when a process starts.
+    """
+    if not getattr(sys, "frozen", False) or not sys.platform.startswith("linux"):
+        return
+    original = os.environ.pop("LD_LIBRARY_PATH_ORIG", None)
+    if original:
+        os.environ["LD_LIBRARY_PATH"] = original
+    else:
+        os.environ.pop("LD_LIBRARY_PATH", None)
+
+
 def format_size(num_bytes: Optional[float]) -> str:
     if num_bytes is None or num_bytes < 0:
         return "—"

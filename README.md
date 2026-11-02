@@ -474,6 +474,10 @@ tools/make_icon.py           regenerates the icon
 **A clip failed.** Double-click it to see the error and the FFmpeg log. Use *Copy log*
 to share it when reporting an issue.
 
+**Checking what ClipShrinker detects.** Run it from a terminal with `--diagnose`
+(for example `./ClipShrinker-linux-x86_64.AppImage --diagnose`). It prints the FFmpeg it
+uses and which GPU encoders work, and is handy to include in bug reports.
+
 **A GPU encoder shows "(not detected)".** That GPU or its driver isn't available.
 Update the graphics driver, or use *CPU (software)*.
 - **AMD or Intel on Linux:** use **VA-API**, not *AMD AMF* or *Intel Quick Sync*. Those

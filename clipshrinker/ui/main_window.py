@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 from clipshrinker import __app_name__, __version__
 from clipshrinker.config import AppConfig
 from clipshrinker.encode import MODE_QUALITY, EncodeSettings, build_plan
-from clipshrinker.ffmpeg import available_encoders, encoder_works, find_vaapi_device, format_size
+from clipshrinker.ffmpeg import detect_hardware, format_size
 from clipshrinker.jobs import (
     DONE,
     FAILED,
@@ -63,13 +63,7 @@ class _HwDetect(QRunnable):
         self.ffmpeg, self.signals = ffmpeg, signals
 
     def run(self) -> None:
-        compiled = available_encoders(self.ffmpeg)
-        result = {"cpu": True}
-        for hw in ("nvenc", "qsv", "amf", "videotoolbox"):
-            enc = f"h264_{hw}"
-            result[hw] = enc in compiled and encoder_works(self.ffmpeg, enc)
-        device = find_vaapi_device(self.ffmpeg) if "h264_vaapi" in compiled or "hevc_vaapi" in compiled else ""
-        result["vaapi"] = bool(device)
+        result, device = detect_hardware(self.ffmpeg)
         if device:
             self.signals.vaapi_device.emit(device)
         self.signals.done.emit(result)

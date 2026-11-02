@@ -189,3 +189,23 @@ def test_vaapi_with_audio_mix_uses_filter_complex():
 
 def test_vaapi_vp9_is_rejected():
     assert validate(EncodeSettings(codec="vp9", hardware="vaapi", container="webm", audio_codec="opus"))
+
+
+def test_restore_child_environment(monkeypatch):
+    import sys as _sys
+
+    from clipshrinker.ffmpeg import restore_child_environment
+
+    monkeypatch.setattr(_sys, "frozen", True, raising=False)
+    monkeypatch.setattr(_sys, "platform", "linux")
+    # Bootloader set a path, and there was none before: remove it.
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/.mount_x/_internal")
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
+    restore_child_environment()
+    assert "LD_LIBRARY_PATH" not in os.environ
+    # The user had their own path: put it back.
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/.mount_x/_internal")
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/opt/mylibs")
+    restore_child_environment()
+    assert os.environ["LD_LIBRARY_PATH"] == "/opt/mylibs"
+    assert "LD_LIBRARY_PATH_ORIG" not in os.environ
